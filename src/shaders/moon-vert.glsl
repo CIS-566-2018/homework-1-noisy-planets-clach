@@ -35,6 +35,8 @@ out vec4 fs_Nor;            // The array of normals that has been transformed by
 out vec4 fs_Col;            // The color of each vertex. This is implicitly passed to the fragment shader.
 out vec4 fs_LightVec;
 
+out float worleyDistance;
+
 
 //http://www.neilmendoza.com/glsl-rotation-about-an-arbitrary-axis/
 mat4 rotationMatrix(vec3 axis, float angle) {
@@ -49,6 +51,61 @@ mat4 rotationMatrix(vec3 axis, float angle) {
                 0.0,                                0.0,                                0.0,                                1.0);
 }
 
+vec3 random3(vec3 c) {
+	float j = 4096.0*sin(dot(c,vec3(17.0, 59.4, 15.0)));
+	vec3 r;
+	r.z = fract(512.0*j);
+	j *= .125;
+	r.x = fract(512.0*j);
+	j *= .125;
+	r.y = fract(512.0*j);
+	return r-0.5;
+}
+
+vec3 PixelToGrid(vec3 pixel, float size) {
+    vec3 fakeDimensions = vec3(0.4); // some made up grid dimensions
+    vec3 gridPos = pixel / fakeDimensions;
+    // Determine number of cells (NxN)
+    gridPos *= size;
+
+    return gridPos;
+}
+
+float worleyNoise(vec3 gridPos, ivec3 cell) {
+    vec3 surroundingPoints[26]; // points within the 26 surrounding cells
+
+    int count = 0;
+    for (int i = cell.x - 1; i <= cell.x + 1; i++) {
+        for (int j = cell.y - 1; j <= cell.y + 1; j++) {
+            for (int k = cell.z -1; k <= cell.z + 1; k++) {
+             // get random vec3 from (-1, 1) based on current cell
+            vec3 randomP = random3(vec3(i, j, k));
+            randomP = (randomP + 1.f) / 2.f; // scale to (0, 1)
+            randomP = randomP + vec3(i, j, k); // get random point within current cellID
+
+            surroundingPoints[count] = randomP;
+            count++;
+            }
+        }
+    }
+
+    // find closest random point to current fragment
+    float minDistance = 9999999.f;
+    vec3 closestPoint = vec3(0.f, 0.f, 0.f);
+    for (int i = 0; i < surroundingPoints.length(); i++) {
+        float distance = sqrt(pow(surroundingPoints[i].x - gridPos.x, 2.0) + 
+                              pow(surroundingPoints[i].y - gridPos.y, 2.0) +
+                              pow(surroundingPoints[i].z - gridPos.z, 2.0));
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestPoint = surroundingPoints[i];
+        }
+    }
+
+    return minDistance;
+    
+}
+
 void main()
 {
     fs_Col = vs_Col;                         // Pass the vertex colors to the fragment shader for interpolation
@@ -60,27 +117,35 @@ void main()
 
     fs_Pos = modelposition; // pass the model position (before rotating) to fragment shader
 
+    // worley noise
+    vec3 fragPos = vec3(fs_Pos);
+    float numWorleyCells = 4.0;
+    vec3 worleyGridPos = PixelToGrid(fragPos, numWorleyCells);
+    ivec3 worleyCell = ivec3(worleyGridPos);
+
+    float minDistance = worleyNoise(worleyGridPos, worleyCell);
+    worleyDistance = minDistance;
+
+    if (minDistance < 0.5) {
+        modelposition = modelposition - vec4(clamp(minDistance * fs_Nor.x, 0.0, 0.01),
+                                             clamp(minDistance * fs_Nor.y, 0.0, 0.01),
+                                             clamp(minDistance * fs_Nor.z, 0.0, 0.01), 0.0); 
+    } 
+
     // calculate light position and light direction
-    vec4 lightPos = vec4(1.0);
-    lightPos.x = 10.0 * sin(float(u_Time) * 3.14159 * 0.001);
-    lightPos.y = 0.0;
-    lightPos.z = 10.0 * cos(float(u_Time) * 3.14159 * 0.001);
-    mat4 rotationMat = rotationMatrix(vec3(0.0, 0.8, 1.2), -0.52);
-    lightPos = rotationMat * lightPos;
-    lightPos = vec4(5, 5, 3, 1); 
+    vec4 lightPos = vec4(5, 5, 3, 1); 
     fs_LightVec = lightPos - modelposition;  // Compute the direction in which the light source lies
 
-
     // rotate about moon's axis
-    mat4 R1 = rotationMatrix(vec3(0.0, 1.0, 0.0), float(u_Time) * 3.14159 * 0.005);
+    mat4 R1 = rotationMatrix(vec3(0.0, 1.0, 0.0), float(u_Time) * 3.14159 * 0.002);
     mat4 T1 = mat4(1.0, 0.0, 0.0, 0.0,
                    0.0, 1.0, 0.0, 0.0,
                    0.0, 0.0, 1.0, 0.0,
-                   -2.0, 0.0, 0.0, 1.0);
+                   -4.0, 0.0, 0.0, 1.0);
     mat4 T1_inverse = mat4(1.0, 0.0, 0.0, 0.0,
                            0.0, 1.0, 0.0, 0.0,
                            0.0, 0.0, 1.0, 0.0,
-                           2.0, 0.0, 0.0, 1.0);
+                           4.0, 0.0, 0.0, 1.0);
     modelposition = T1 * R1 * T1_inverse * modelposition;
     fs_Nor = T1 * R1 * T1_inverse * fs_Nor;
 
