@@ -3384,6 +3384,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 // This will be referred to by dat.GUI's functions that add GUI elements.
 const controls = {
     'tesselations': 6,
+    'Lambert Color': [255, 180, 203],
     'Animation': true,
     'Surface Movement': false,
     'Animation Speed': 3
@@ -15479,12 +15480,14 @@ class ShaderProgram {
             __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].uniform1i(this.unifLandMoveTime, landMoveTime);
         }
     }
+
     setAspectRatio(size) {
         this.use();
         if (this.unifAspectRatio !== -1) {
             __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].uniform2fv(this.unifAspectRatio, size);
         }
     }
+
     draw(d) {
         this.use();
         if (this.attrPos != -1 && d.bindPos()) {
